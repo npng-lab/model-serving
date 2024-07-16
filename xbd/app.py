@@ -38,6 +38,37 @@ app.add_middleware(
 async def get_health() -> HealthResult:
     return HealthResult(isAlive=True)
 
+@app.post("/predict", response_model=PredictionResponse)
+async def create_prediction(file: UploadFile | None = None) -> Any:
+  if not file:
+    raise HTTPException(status_code=404, detail="No file uploaded")
+
+  if not file.content_type.startswith("image"):
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="이미지 파일만 업로드 가능합니다.",
+    )
+
+  if file.filename.split(".")[-1].lower() not in ["png"]:
+    raise HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        detail="업로드 불가능한 이미지 확장자입니다."
+    )
+
+  random_name = secrets.token_urlsafe(16)
+  file.filename = f"{random_name}.png"
+  image = PILImage.open(file.file)
+
+  image.save(f"/content/{file.filename}", "png")
+  result = prediction(f"/content/{file.filename}")
+
+  return {
+      "status": "success",
+      "message": "추론 성공",
+      "instance_detected": len(result),
+      "instances": result
+    }
+
 ngrok_tunnel = ngrok.connect(8000)
 print('공용 URL:', ngrok_tunnel.public_url)
 nest_asyncio.apply()
